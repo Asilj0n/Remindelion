@@ -1,0 +1,194 @@
+{
+    "1658352530": [
+        {
+            "day": "monday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "wednesday",
+            "time": "09:00",
+            "subject": "Physics 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "wednesday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "thursday",
+            "time": "09:00",
+            "subject": "Sociology",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "09:00",
+            "subject": "Physics 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "15:30",
+            "subject": "Sociology",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "monday",
+            "time": "17:30",
+            "subject": "Physical Training",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "tuesday",
+            "time": "13:30",
+            "subject": "Kyrgyz Language (Elementary Level)",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "tuesday",
+            "time": "15:30",
+            "subject": "Geography of Kyrgyzstan",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "thursday",
+            "time": "17:00",
+            "subject": "Geography of Kyrgyzstan",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "wednesday",
+            "time": "15:30",
+            "subject": "Kyrgyz Language (Elementary Level)",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "wednesday",
+            "time": "17:30",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "thursday",
+            "time": "18:00",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "friday",
+            "time": "17:30",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        }
+    ],
+    "8116673787": [
+        {
+            "day": "monday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "wednesday",
+            "time": "09:00",
+            "subject": "Physics 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "wednesday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "thursday",
+            "time": "09:00",
+            "subject": "Sociology",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "09:00",
+            "subject": "Physics 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "11:00",
+            "subject": "Calculus 2",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "friday",
+            "time": "15:30",
+            "subject": "Sociology",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "monday",
+            "time": "17:30",
+            "subject": "Physical Training",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "tuesday",
+            "time": "13:30",
+            "subject": "Kyrgyz Language (Elementary Level)",
+            "notification_time": "15 min"
+        },
+        {
+            "day": "tuesday",
+            "time": "15:30",
+            "subject": "Geography of Kyrgyzstan",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "thursday",
+            "time": "17:00",
+            "subject": "Geography of Kyrgyzstan",
+            "notification_time": "No reminder"
+        },
+        {
+            "day": "wednesday",
+            "time": "15:30",
+            "subject": "Kyrgyz Language (Elementary Level)",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "wednesday",
+            "time": "17:30",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "thursday",
+            "time": "18:00",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "friday",
+            "time": "17:30",
+            "subject": "Programming 2",
+            "notification_time": "15 min",
+            "last_notified": null
+        }
+    ]
+}
