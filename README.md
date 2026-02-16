@@ -4,10 +4,12 @@ A Telegram bot that helps you manage and remember your weekly lessons/schedule.
 
 ## Features
 
-- 📚 **Add Lessons**: Store your lessons with day, time, and subject
+- 📚 **Add Lessons**: Easy button-based day selection + text input for time
 - 📅 **View Schedule**: See your complete weekly schedule
-- 🗑️ **Remove Lessons**: Delete lessons you no longer need
-- ⏰ **Reminders**: Choose when to be reminded (5 min, 15 min, 30 min, or 1 hour before)
+- 📆 **Today/Tomorrow**: Quick view of today's or tomorrow's lessons
+- 🗑️ **Remove Lessons**: Button-based removal - select day, then pick the lesson
+- ⏰ **Reminders**: Get notified 5 min, 15 min, 30 min, or 1 hour before lessons
+- 🕐 **Bishkek Timezone**: All times use Asia/Bishkek (UTC+6)
 - 💾 **Persistent Storage**: Your lessons are saved locally in JSON format
 
 ## Requirements
@@ -44,35 +46,36 @@ python bot.py
 |---------|-------------|
 | `/start` | Shows bot information and available commands |
 | `/schedule` | View your weekly schedule with all lessons |
+| `/lessons_today` | View today's lessons |
+| `/lessons_tomorrow` | View tomorrow's lessons |
 | `/add_lesson` | Add a new lesson to your schedule |
 | `/remove_lesson` | Remove a lesson from your schedule |
+| `/turn_on_off` | Turn on/off reminder for a specific lesson |
 | `/help` | Show all available commands |
 
 ## Adding a Lesson
 
-When you use `/add_lesson`, the bot will ask you to enter your lesson in this format:
-```
-Day, Time, Subject
-```
+When you use `/add_lesson`:
 
-**Example:** `Monday, 14:00, Calculus 2`
-
-- **Day**: Monday through Sunday
-- **Time**: 24-hour format (00:00 - 23:59)
-- **Subject**: Your lesson name
-
-After submitting, the bot will ask when you want to be reminded:
-- 5 minutes before
-- 15 minutes before
-- 30 minutes before
-- 1 hour before
+1. **Enter course name** - Type the name of your course (e.g., "Calculus 2")
+2. **Select day** - Tap a button to choose the day (Monday - Sunday)
+3. **Enter time** - Type the time in format `##:##` (e.g., `09:30` or `14:00`)
+4. **Set reminder** - Choose whether to set a reminder:
+   - 5 minutes before
+   - 15 minutes before
+   - 30 minutes before
+   - 1 hour before
+   - No reminder
 
 ## Removing a Lesson
 
-Use `/remove_lesson` and enter the lesson details in the same format:
-```
-Day, Time, Subject
-```
+When you use `/remove_lesson`:
+
+1. **Select day** - Tap a button to choose the day
+2. **Select lesson** - See all lessons on that day and tap to remove
+   - If no lessons exist on that day, you'll be prompted to select another day
+   - Use "Back" to go back to day selection
+   - Use "Cancel" to cancel the operation
 
 ## Data Storage
 
@@ -103,10 +106,11 @@ All lessons are stored in `lessons_data.json` in the following format:
 - The bot stores data per user ID, so each user has their own schedule
 - Lessons are sorted by day of week and time for easier viewing
 - Use `/cancel` to stop any ongoing operation
+- Random text input will prompt users to use valid commands
+- Automatic reminders are sent based on your notification preferences
 
 ## Future Enhancements
 
-- Automatic reminder notifications at scheduled times
 - Export schedule to calendar formats
 - Recurring lessons
 - Lesson notes and location information
