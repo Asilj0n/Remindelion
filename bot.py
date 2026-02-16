@@ -1,3 +1,14 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# Timezone for Bishkek (UTC+6)
+BISHKEK_TZ = ZoneInfo("Asia/Bishkek")
+
+print("Server time (UTC):", datetime.now())
+print("Bishkek time:", datetime.now(BISHKEK_TZ))
+
+
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application,
@@ -24,7 +35,7 @@ import re
 from datetime import datetime, timedelta
 
 # Conversation states
-CHOOSING_ACTION, WAITING_LESSON_INPUT, ASKING_REMINDER, WAITING_NOTIFICATION, WAITING_REMOVE_INPUT, WAITING_REMINDER_LESSON_INPUT, WAITING_REMINDER_CHOICE = range(7)
+CHOOSING_ACTION, WAITING_LESSON_INPUT, ASKING_REMINDER, WAITING_NOTIFICATION, WAITING_REMOVE_INPUT, WAITING_REMINDER_LESSON_INPUT, WAITING_REMINDER_CHOICE, WAITING_COURSE_NAME, WAITING_DAY_SELECTION, WAITING_TIME_INPUT, WAITING_REMOVE_DAY_SELECTION, WAITING_REMOVE_LESSON_SELECTION = range(12)
 
 # Bot commands help text
 HELP_TEXT = """<b>📚 Available Commands:</b>
@@ -149,11 +160,13 @@ def get_next_lesson_datetime(day, time_str, now):
         days_ahead = 7
 
     lesson_date = (now + timedelta(days=days_ahead)).date()
-    return datetime.combine(lesson_date, lesson_time_today.time())
+    # Return timezone-aware datetime
+    naive_dt = datetime.combine(lesson_date, lesson_time_today.time())
+    return naive_dt.replace(tzinfo=now.tzinfo) if now.tzinfo else naive_dt
 
 async def check_and_send_reminders(context: ContextTypes.DEFAULT_TYPE):
     """Check upcoming lessons and send reminders"""
-    now = datetime.now()
+    now = datetime.now(BISHKEK_TZ)  # Use Bishkek timezone
     all_lessons = get_all_lessons()
     if not all_lessons:
         return
@@ -183,7 +196,11 @@ async def check_and_send_reminders(context: ContextTypes.DEFAULT_TYPE):
             last_notified = lesson.get("last_notified")
             if last_notified:
                 try:
-                    if datetime.fromisoformat(last_notified) == reminder_dt:
+                    last_notified_dt = datetime.fromisoformat(last_notified)
+                    # Make timezone-aware if naive
+                    if last_notified_dt.tzinfo is None:
+                        last_notified_dt = last_notified_dt.replace(tzinfo=BISHKEK_TZ)
+                    if last_notified_dt == reminder_dt:
                         continue
                 except ValueError:
                     pass
@@ -219,133 +236,94 @@ async def add_lesson_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Start the add lesson conversation"""
     await update.message.reply_text(
         "📝 <b>Add New Lesson</b>\n\n"
-        "You can add one or multiple lessons!\n\n"
-        "<b>For ONE lesson:</b>\n"
-        "<code>Day, Time, Subject</code>\n"
-        "Example: <code>Monday, 14:00, Calculus 2</code>\n\n"
-        "<b>For MULTIPLE lessons (same day):</b>\n"
-        "<code>Day, Time, Subject</code>\n"
-        "<code>Time, Subject</code>\n"
-        "<code>Time, Subject</code>\n"
-        "Example:\n"
-        "<code>Friday, 09:00, Physics 2</code>\n"
-        "<code>11:00, Calculus 2</code>\n"
-        "<code>14:00, Programming</code>\n\n"
-        "Days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday\n"
-        "Time: 24-hour format (00:00 - 23:59)",
+        "Please enter the <b>course name</b>:\n\n"
+        "Example: <code>Calculus 2</code>",
         parse_mode="HTML"
     )
-    return WAITING_LESSON_INPUT
+    return WAITING_COURSE_NAME
 
-async def lesson_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle lesson input in format: Day, Time, Subject (with support for multiple lessons)"""
-    text = update.message.text.strip()
-    lines = text.split('\n')
+async def course_name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle course name input and show day selection buttons"""
+    course_name = update.message.text.strip()
     
-    lessons_to_add = []
-    current_day = None
+    if not course_name:
+        await update.message.reply_text(
+            "❌ Course name cannot be empty! Please enter a valid course name:",
+            parse_mode="HTML"
+        )
+        return WAITING_COURSE_NAME
     
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Parse input
-        parts = [p.strip() for p in line.split(',')]
-        
-        # First line must have 3 parts (Day, Time, Subject)
-        if i == 0:
-            if len(parts) != 3:
-                await update.message.reply_text(
-                    "❌ Invalid format! First line must be:\n"
-                    "<code>Day, Time, Subject</code>\n\n"
-                    "Example: <code>Monday, 14:00, Calculus 2</code>",
-                    parse_mode="HTML"
-                )
-                return WAITING_LESSON_INPUT
-            
-            day, time_str, subject = parts
-            
-            # Validate day
-            if not validate_day(day):
-                await update.message.reply_text(
-                    "❌ Invalid day! Please use one of:\n"
-                    "Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday",
-                    parse_mode="HTML"
-                )
-                return WAITING_LESSON_INPUT
-            
-            # Validate time
-            if not validate_time_format(time_str):
-                await update.message.reply_text(
-                    "❌ Invalid time format! Please use 24-hour format (HH:MM).\n"
-                    "Example: <code>14:00</code> for 2 PM",
-                    parse_mode="HTML"
-                )
-                return WAITING_LESSON_INPUT
-            
-            current_day = day
-            lessons_to_add.append({'day': day, 'time': time_str, 'subject': subject})
-        
-        # Subsequent lines can be either (Time, Subject) or (Day, Time, Subject)
-        else:
-            if len(parts) == 2:
-                # Format: Time, Subject (same day as first line)
-                time_str, subject = parts
-                
-                if not validate_time_format(time_str):
-                    await update.message.reply_text(
-                        f"❌ Invalid time format on line {i+1}! Use 24-hour format (HH:MM).\n"
-                        f"Example: <code>14:00</code> for 2 PM",
-                        parse_mode="HTML"
-                    )
-                    return WAITING_LESSON_INPUT
-                
-                lessons_to_add.append({'day': current_day, 'time': time_str, 'subject': subject})
-            
-            elif len(parts) == 3:
-                # Format: Day, Time, Subject
-                day, time_str, subject = parts
-                
-                if not validate_day(day):
-                    await update.message.reply_text(
-                        f"❌ Invalid day on line {i+1}! Please use one of:\n"
-                        "Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday",
-                        parse_mode="HTML"
-                    )
-                    return WAITING_LESSON_INPUT
-                
-                if not validate_time_format(time_str):
-                    await update.message.reply_text(
-                        f"❌ Invalid time format on line {i+1}! Use 24-hour format (HH:MM).\n"
-                        f"Example: <code>14:00</code> for 2 PM",
-                        parse_mode="HTML"
-                    )
-                    return WAITING_LESSON_INPUT
-                
-                current_day = day
-                lessons_to_add.append({'day': day, 'time': time_str, 'subject': subject})
-            
-            else:
-                await update.message.reply_text(
-                    f"❌ Invalid format on line {i+1}!\n\n"
-                    "Use either:\n"
-                    "<code>Time, Subject</code> (for same day)\n"
-                    "or\n"
-                    "<code>Day, Time, Subject</code> (for new day)",
-                    parse_mode="HTML"
-                )
-                return WAITING_LESSON_INPUT
+    # Store course name in context
+    context.user_data['new_course_name'] = course_name
     
-    # Store in context
-    context.user_data['new_lessons'] = lessons_to_add
+    # Show day selection buttons
+    keyboard = [
+        [InlineKeyboardButton("Monday", callback_data="day_monday"),
+         InlineKeyboardButton("Tuesday", callback_data="day_tuesday")],
+        [InlineKeyboardButton("Wednesday", callback_data="day_wednesday"),
+         InlineKeyboardButton("Thursday", callback_data="day_thursday")],
+        [InlineKeyboardButton("Friday", callback_data="day_friday"),
+         InlineKeyboardButton("Saturday", callback_data="day_saturday")],
+        [InlineKeyboardButton("Sunday", callback_data="day_sunday")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Show summary
-    summary = f"✅ <b>Got {len(lessons_to_add)} lesson(s):</b>\n\n"
-    for lesson in lessons_to_add:
-        summary += f"• <b>{lesson['subject']}</b> on <b>{lesson['day']}</b> at <b>{lesson['time']}</b>\n"
+    await update.message.reply_text(
+        f"📚 Course: <b>{course_name}</b>\n\n"
+        "📅 Select the day:",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
     
-    # Ask if user wants reminder
+    return WAITING_DAY_SELECTION
+
+async def day_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle day selection and ask for time input"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract day from callback data
+    day = query.data.replace("day_", "").capitalize()
+    context.user_data['new_course_day'] = day
+    
+    course_name = context.user_data.get('new_course_name', 'Unknown')
+    
+    await query.edit_message_text(
+        f"📚 Course: <b>{course_name}</b>\n"
+        f"📅 Day: <b>{day}</b>\n\n"
+        "🕐 Enter the time:\n\n"
+        "Format: <code>##:##</code>\n"
+        "Example: <code>09:30</code> or <code>14:00</code>",
+        parse_mode="HTML"
+    )
+    
+    return WAITING_TIME_INPUT
+
+async def time_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle time input and ask about reminder"""
+    time_str = update.message.text.strip()
+    
+    # Validate time format
+    if not validate_time_format(time_str):
+        await update.message.reply_text(
+            "❌ Invalid time format!\n\n"
+            "Please use format: <code>##:##</code>\n"
+            "Example: <code>09:30</code> or <code>14:00</code>",
+            parse_mode="HTML"
+        )
+        return WAITING_TIME_INPUT
+    
+    course_name = context.user_data.get('new_course_name', 'Unknown')
+    day = context.user_data.get('new_course_day', 'Unknown')
+    
+    # Store lesson data
+    context.user_data['new_lessons'] = [{
+        'day': day,
+        'time': time_str,
+        'subject': course_name
+    }]
+    
+    # Ask about reminder
     keyboard = [
         [InlineKeyboardButton("✅ Yes, set reminder", callback_data="reminder_yes")],
         [InlineKeyboardButton("❌ No reminder", callback_data="reminder_no")]
@@ -353,12 +331,18 @@ async def lesson_input_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        summary + "\n⏰ Do you want to set a reminder for these lessons?",
+        f"✅ <b>Lesson Summary:</b>\n\n"
+        f"📚 Course: <b>{course_name}</b>\n"
+        f"📅 Day: <b>{day}</b>\n"
+        f"🕐 Time: <b>{time_str}</b>\n\n"
+        "⏰ Do you want to set a reminder?",
         parse_mode="HTML",
         reply_markup=reply_markup
     )
     
     return ASKING_REMINDER
+
+# Old button-based time selection removed - now using text input
 
 async def reminder_choice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle reminder choice (yes/no)"""
@@ -492,72 +476,168 @@ async def remove_lesson_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("📭 You don't have any lessons to remove!")
         return ConversationHandler.END
     
+    # Store lessons in context for later reference
+    context.user_data['remove_lessons'] = lessons
+    
+    # Show day selection buttons
+    keyboard = [
+        [InlineKeyboardButton("Monday", callback_data="rmday_monday"),
+         InlineKeyboardButton("Tuesday", callback_data="rmday_tuesday")],
+        [InlineKeyboardButton("Wednesday", callback_data="rmday_wednesday"),
+         InlineKeyboardButton("Thursday", callback_data="rmday_thursday")],
+        [InlineKeyboardButton("Friday", callback_data="rmday_friday"),
+         InlineKeyboardButton("Saturday", callback_data="rmday_saturday")],
+        [InlineKeyboardButton("Sunday", callback_data="rmday_sunday")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="rmday_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await update.message.reply_text(
         "🗑️ <b>Remove Lesson</b>\n\n"
-        "Please enter the lesson details in this format:\n"
-        "<code>Day, Time, Subject</code>\n\n"
-        "Example: <code>Monday, 14:00, Calculus 2</code>",
-        parse_mode="HTML"
+        "📅 Select the day:",
+        parse_mode="HTML",
+        reply_markup=reply_markup
     )
-    return WAITING_REMOVE_INPUT
+    return WAITING_REMOVE_DAY_SELECTION
 
-async def remove_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle lesson removal input"""
-    text = update.message.text.strip()
+async def remove_day_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle day selection for remove lesson"""
+    query = update.callback_query
+    await query.answer()
     
-    # Parse input
-    parts = [p.strip() for p in text.split(',')]
+    if query.data == "rmday_cancel":
+        await query.edit_message_text("❌ Operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
     
-    if len(parts) != 3:
-        await update.message.reply_text(
-            "❌ Invalid format! Please use:\n"
-            "<code>Day, Time, Subject</code>\n\n"
-            "Example: <code>Monday, 14:00, Calculus 2</code>",
-            parse_mode="HTML"
+    # Extract day from callback data
+    day = query.data.replace("rmday_", "").capitalize()
+    context.user_data['remove_day'] = day
+    
+    # Get lessons for this day
+    lessons = context.user_data.get('remove_lessons', [])
+    day_lessons = [l for l in lessons if l['day'].lower() == day.lower()]
+    
+    if not day_lessons:
+        # No lessons on this day - show message and let user pick another day
+        keyboard = [
+            [InlineKeyboardButton("Monday", callback_data="rmday_monday"),
+             InlineKeyboardButton("Tuesday", callback_data="rmday_tuesday")],
+            [InlineKeyboardButton("Wednesday", callback_data="rmday_wednesday"),
+             InlineKeyboardButton("Thursday", callback_data="rmday_thursday")],
+            [InlineKeyboardButton("Friday", callback_data="rmday_friday"),
+             InlineKeyboardButton("Saturday", callback_data="rmday_saturday")],
+            [InlineKeyboardButton("Sunday", callback_data="rmday_sunday")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="rmday_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            f"📭 <b>No lessons on {day}!</b>\n\n"
+            "📅 Select another day:",
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
-        return WAITING_REMOVE_INPUT
+        return WAITING_REMOVE_DAY_SELECTION
     
-    day, time_str, subject = parts
+    # Sort lessons by time
+    day_lessons_sorted = sorted(day_lessons, key=lambda x: x['time'])
+    context.user_data['remove_day_lessons'] = day_lessons_sorted
     
-    # Validate day
-    if not validate_day(day):
-        await update.message.reply_text(
-            "❌ Invalid day! Please use one of:\n"
-            "Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday",
-            parse_mode="HTML"
+    # Create buttons for each lesson on this day
+    keyboard = []
+    for i, lesson in enumerate(day_lessons_sorted):
+        button_text = f"{lesson['time']} - {lesson['subject']}"
+        callback_data = f"rmlesson_{i}"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    
+    # Add back and cancel buttons
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="rmlesson_back"),
+                     InlineKeyboardButton("❌ Cancel", callback_data="rmlesson_cancel")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"🗑️ <b>Remove Lesson</b>\n\n"
+        f"📅 Day: <b>{day}</b>\n\n"
+        "Select the lesson to remove:",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
+    return WAITING_REMOVE_LESSON_SELECTION
+
+async def remove_lesson_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle lesson selection for removal"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "rmlesson_cancel":
+        await query.edit_message_text("❌ Operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    if query.data == "rmlesson_back":
+        # Go back to day selection
+        keyboard = [
+            [InlineKeyboardButton("Monday", callback_data="rmday_monday"),
+             InlineKeyboardButton("Tuesday", callback_data="rmday_tuesday")],
+            [InlineKeyboardButton("Wednesday", callback_data="rmday_wednesday"),
+             InlineKeyboardButton("Thursday", callback_data="rmday_thursday")],
+            [InlineKeyboardButton("Friday", callback_data="rmday_friday"),
+             InlineKeyboardButton("Saturday", callback_data="rmday_saturday")],
+            [InlineKeyboardButton("Sunday", callback_data="rmday_sunday")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="rmday_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "🗑️ <b>Remove Lesson</b>\n\n"
+            "📅 Select the day:",
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
-        return WAITING_REMOVE_INPUT
+        return WAITING_REMOVE_DAY_SELECTION
     
-    # Validate time
-    if not validate_time_format(time_str):
-        await update.message.reply_text(
-            "❌ Invalid time format! Please use 24-hour format (HH:MM).\n"
-            "Example: <code>14:00</code> for 2 PM",
-            parse_mode="HTML"
-        )
-        return WAITING_REMOVE_INPUT
+    # Extract lesson index from callback data
+    try:
+        lesson_index = int(query.data.replace("rmlesson_", ""))
+    except ValueError:
+        await query.edit_message_text("❌ Error: Invalid selection.")
+        context.user_data.clear()
+        return ConversationHandler.END
     
-    # Remove lesson
+    day_lessons = context.user_data.get('remove_day_lessons', [])
+    
+    if lesson_index < 0 or lesson_index >= len(day_lessons):
+        await query.edit_message_text("❌ Error: Lesson not found.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    lesson = day_lessons[lesson_index]
     user_id = update.effective_user.id
-    success = remove_lesson(user_id, day, time_str, subject)
+    
+    # Remove the lesson
+    success = remove_lesson(user_id, lesson['day'], lesson['time'], lesson['subject'])
     
     if success:
-        await update.message.reply_text(
+        await query.edit_message_text(
             f"✅ <b>Lesson Removed Successfully!</b>\n\n"
-            f"🗑️ Removed: <b>{subject}</b> on <b>{day}</b> at <b>{time_str}</b>\n\n"
+            f"🗑️ Removed: <b>{lesson['subject']}</b>\n"
+            f"📅 Day: <b>{lesson['day']}</b>\n"
+            f"🕐 Time: <b>{lesson['time']}</b>\n\n"
             "Use /schedule to view your updated schedule!",
             parse_mode="HTML"
         )
     else:
-        await update.message.reply_text(
-            f"❌ Lesson not found!\n\n"
-            f"Couldn't find: <b>{subject}</b> on <b>{day}</b> at <b>{time_str}</b>\n\n"
-            "Use /schedule to see your current lessons.",
+        await query.edit_message_text(
+            "❌ Failed to remove lesson. Please try again.",
             parse_mode="HTML"
         )
     
     context.user_data.clear()
     return ConversationHandler.END
+
+# Old remove_input_handler removed - now using button-based flow
 
 async def turn_on_off_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the turn on/off reminder conversation"""
@@ -722,9 +802,10 @@ async def lessons_today_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("📭 You don't have any lessons scheduled yet!\n\nUse /add_lesson to add your first lesson.")
         return
     
-    # Get today's day name
-    today = datetime.now().strftime("%A").lower()
-    today_display = datetime.now().strftime("%A, %B %d, %Y")
+    # Get today's day name using Bishkek timezone
+    now = datetime.now(BISHKEK_TZ)
+    today = now.strftime("%A").lower()
+    today_display = now.strftime("%A, %B %d, %Y")
     
     # Filter lessons for today
     today_lessons = [l for l in lessons if l['day'].lower() == today]
@@ -770,8 +851,9 @@ async def lessons_tomorrow_command(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("📭 You don't have any lessons scheduled yet!\n\nUse /add_lesson to add your first lesson.")
         return
     
-    # Get tomorrow's day name
-    tomorrow = (datetime.now() + timedelta(days=1))
+    # Get tomorrow's day name using Bishkek timezone
+    now = datetime.now(BISHKEK_TZ)
+    tomorrow = now + timedelta(days=1)
     tomorrow_day = tomorrow.strftime("%A").lower()
     tomorrow_display = tomorrow.strftime("%A, %B %d, %Y")
     
@@ -825,6 +907,19 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle random text messages"""
+    await update.message.reply_text(
+        "❌ Invalid input!\n\n"
+        "Please use one of the available commands:\n"
+        "/start - Show bot info\n"
+        "/help - Show all commands\n"
+        "/schedule - View weekly schedule\n"
+        "/add_lesson - Add a lesson\n"
+        "/remove_lesson - Remove a lesson",
+        parse_mode="HTML"
+    )
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Log the error and send a friendly message"""
     logging.exception("Unhandled exception during update processing", exc_info=context.error)
@@ -869,8 +964,15 @@ def main():
     add_lesson_conv = ConversationHandler(
         entry_points=[CommandHandler("add_lesson", add_lesson_command)],
         states={
-            WAITING_LESSON_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, lesson_input_handler),
+            WAITING_COURSE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, course_name_handler),
+                CommandHandler("cancel", cancel)
+            ],
+            WAITING_DAY_SELECTION: [
+                CallbackQueryHandler(day_selection_callback, pattern="^day_")
+            ],
+            WAITING_TIME_INPUT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, time_input_handler),
                 CommandHandler("cancel", cancel)
             ],
             ASKING_REMINDER: [
@@ -893,9 +995,11 @@ def main():
     remove_lesson_conv = ConversationHandler(
         entry_points=[CommandHandler("remove_lesson", remove_lesson_command)],
         states={
-            WAITING_REMOVE_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, remove_input_handler),
-                CommandHandler("cancel", cancel)
+            WAITING_REMOVE_DAY_SELECTION: [
+                CallbackQueryHandler(remove_day_selection_callback, pattern="^rmday_")
+            ],
+            WAITING_REMOVE_LESSON_SELECTION: [
+                CallbackQueryHandler(remove_lesson_selection_callback, pattern="^rmlesson_")
             ]
         },
         fallbacks=[
@@ -934,8 +1038,9 @@ def main():
     application.add_handler(remove_lesson_conv)
     application.add_handler(reminder_conv)
     
-    # Handle unknown commands and errors
+    # Handle unknown commands and random text
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
     application.add_error_handler(error_handler)
 
     # Schedule reminder checks (every 60 seconds)
