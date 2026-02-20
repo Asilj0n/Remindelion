@@ -35,7 +35,7 @@ import re
 from datetime import datetime, timedelta
 
 # Conversation states
-CHOOSING_ACTION, WAITING_LESSON_INPUT, ASKING_REMINDER, WAITING_NOTIFICATION, WAITING_REMOVE_INPUT, WAITING_REMINDER_LESSON_INPUT, WAITING_REMINDER_CHOICE, WAITING_COURSE_NAME, WAITING_DAY_SELECTION, WAITING_TIME_INPUT, WAITING_REMOVE_DAY_SELECTION, WAITING_REMOVE_LESSON_SELECTION = range(12)
+CHOOSING_ACTION, WAITING_LESSON_INPUT, ASKING_REMINDER, WAITING_NOTIFICATION, WAITING_REMOVE_INPUT, WAITING_REMINDER_LESSON_INPUT, WAITING_REMINDER_CHOICE, WAITING_COURSE_NAME, WAITING_DAY_SELECTION, WAITING_TIME_INPUT, WAITING_REMOVE_DAY_SELECTION, WAITING_REMOVE_LESSON_SELECTION, WAITING_TOGGLE_DAY_SELECTION, WAITING_TOGGLE_LESSON_SELECTION = range(14)
 
 # Bot commands help text
 HELP_TEXT = """<b>📚 Available Commands:</b>
@@ -648,14 +648,182 @@ async def turn_on_off_reminder_command(update: Update, context: ContextTypes.DEF
         await update.message.reply_text("📭 You don't have any lessons to modify!")
         return ConversationHandler.END
     
+    # Store lessons in context for later reference
+    context.user_data['toggle_lessons'] = lessons
+    
+    # Show day selection buttons
+    keyboard = [
+        [InlineKeyboardButton("Monday", callback_data="toggleday_monday"),
+         InlineKeyboardButton("Tuesday", callback_data="toggleday_tuesday")],
+        [InlineKeyboardButton("Wednesday", callback_data="toggleday_wednesday"),
+         InlineKeyboardButton("Thursday", callback_data="toggleday_thursday")],
+        [InlineKeyboardButton("Friday", callback_data="toggleday_friday"),
+         InlineKeyboardButton("Saturday", callback_data="toggleday_saturday")],
+        [InlineKeyboardButton("Sunday", callback_data="toggleday_sunday")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="toggleday_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await update.message.reply_text(
         "⏰ <b>Turn On/Off Reminder</b>\n\n"
-        "Please enter the lesson details to modify:\n"
-        "<code>Day, Time, Subject</code>\n\n"
-        "Example: <code>Monday, 14:00, Calculus 2</code>",
-        parse_mode="HTML"
+        "📅 Select the day:",
+        parse_mode="HTML",
+        reply_markup=reply_markup
     )
-    return WAITING_REMINDER_LESSON_INPUT
+    return WAITING_TOGGLE_DAY_SELECTION
+
+async def toggle_day_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle day selection for toggle reminder"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "toggleday_cancel":
+        await query.edit_message_text("❌ Operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    # Extract day from callback data
+    day = query.data.replace("toggleday_", "").capitalize()
+    context.user_data['toggle_day'] = day
+    
+    # Get lessons for this day
+    lessons = context.user_data.get('toggle_lessons', [])
+    day_lessons = [l for l in lessons if l['day'].lower() == day.lower()]
+    
+    if not day_lessons:
+        # No lessons on this day - show message and let user pick another day
+        keyboard = [
+            [InlineKeyboardButton("Monday", callback_data="toggleday_monday"),
+             InlineKeyboardButton("Tuesday", callback_data="toggleday_tuesday")],
+            [InlineKeyboardButton("Wednesday", callback_data="toggleday_wednesday"),
+             InlineKeyboardButton("Thursday", callback_data="toggleday_thursday")],
+            [InlineKeyboardButton("Friday", callback_data="toggleday_friday"),
+             InlineKeyboardButton("Saturday", callback_data="toggleday_saturday")],
+            [InlineKeyboardButton("Sunday", callback_data="toggleday_sunday")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="toggleday_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            f"📭 <b>No lessons on {day}!</b>\n\n"
+            "📅 Select another day:",
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+        return WAITING_TOGGLE_DAY_SELECTION
+    
+    # Sort lessons by time
+    day_lessons_sorted = sorted(day_lessons, key=lambda x: x['time'])
+    context.user_data['toggle_day_lessons'] = day_lessons_sorted
+    
+    # Create buttons for each lesson on this day
+    keyboard = []
+    for i, lesson in enumerate(day_lessons_sorted):
+        reminder_status = lesson.get('notification_time', 'No reminder')
+        if reminder_status == "No reminder":
+            status_icon = "🔕"
+        else:
+            status_icon = "🔔"
+        button_text = f"{status_icon} {lesson['time']} - {lesson['subject']}"
+        callback_data = f"togglelesson_{i}"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    
+    # Add back and cancel buttons
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="togglelesson_back"),
+                     InlineKeyboardButton("❌ Cancel", callback_data="togglelesson_cancel")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"⏰ <b>Turn On/Off Reminder</b>\n\n"
+        f"📅 Day: <b>{day}</b>\n\n"
+        "Select the lesson to modify:\n"
+        "<i>(🔔 = reminder on, 🔕 = reminder off)</i>",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
+    return WAITING_TOGGLE_LESSON_SELECTION
+
+async def toggle_lesson_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle lesson selection for toggle reminder"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "togglelesson_cancel":
+        await query.edit_message_text("❌ Operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    if query.data == "togglelesson_back":
+        # Go back to day selection
+        keyboard = [
+            [InlineKeyboardButton("Monday", callback_data="toggleday_monday"),
+             InlineKeyboardButton("Tuesday", callback_data="toggleday_tuesday")],
+            [InlineKeyboardButton("Wednesday", callback_data="toggleday_wednesday"),
+             InlineKeyboardButton("Thursday", callback_data="toggleday_thursday")],
+            [InlineKeyboardButton("Friday", callback_data="toggleday_friday"),
+             InlineKeyboardButton("Saturday", callback_data="toggleday_saturday")],
+            [InlineKeyboardButton("Sunday", callback_data="toggleday_sunday")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="toggleday_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "⏰ <b>Turn On/Off Reminder</b>\n\n"
+            "📅 Select the day:",
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+        return WAITING_TOGGLE_DAY_SELECTION
+    
+    # Extract lesson index from callback data
+    try:
+        lesson_index = int(query.data.replace("togglelesson_", ""))
+    except ValueError:
+        await query.edit_message_text("❌ Error: Invalid selection.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    day_lessons = context.user_data.get('toggle_day_lessons', [])
+    
+    if lesson_index < 0 or lesson_index >= len(day_lessons):
+        await query.edit_message_text("❌ Error: Lesson not found.")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    lesson = day_lessons[lesson_index]
+    
+    # Store lesson info in context
+    context.user_data['reminder_lesson'] = {
+        'day': lesson['day'],
+        'time': lesson['time'],
+        'subject': lesson['subject']
+    }
+    
+    current_reminder = lesson.get('notification_time', 'No reminder')
+    
+    # Show reminder options
+    keyboard = [
+        [InlineKeyboardButton("5 min", callback_data="reminder_update_5")],
+        [InlineKeyboardButton("15 min", callback_data="reminder_update_15")],
+        [InlineKeyboardButton("30 min", callback_data="reminder_update_30")],
+        [InlineKeyboardButton("1 hour", callback_data="reminder_update_60")],
+        [InlineKeyboardButton("❌ Turn off reminder", callback_data="reminder_update_none")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"⏰ <b>Turn On/Off Reminder</b>\n\n"
+        f"📚 Subject: <b>{lesson['subject']}</b>\n"
+        f"📅 Day: <b>{lesson['day']}</b>\n"
+        f"🕐 Time: <b>{lesson['time']}</b>\n"
+        f"⏰ Current: <b>{current_reminder}</b>\n\n"
+        "Choose new reminder time:",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
+    
+    return WAITING_REMINDER_CHOICE
 
 async def reminder_lesson_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle lesson input for reminder modification"""
@@ -1017,9 +1185,11 @@ def main():
             CommandHandler("turn_on_off", turn_on_off_reminder_command)
         ],
         states={
-            WAITING_REMINDER_LESSON_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, reminder_lesson_input_handler),
-                CommandHandler("cancel", cancel)
+            WAITING_TOGGLE_DAY_SELECTION: [
+                CallbackQueryHandler(toggle_day_selection_callback, pattern="^toggleday_")
+            ],
+            WAITING_TOGGLE_LESSON_SELECTION: [
+                CallbackQueryHandler(toggle_lesson_selection_callback, pattern="^togglelesson_")
             ],
             WAITING_REMINDER_CHOICE: [
                 CallbackQueryHandler(reminder_update_callback)

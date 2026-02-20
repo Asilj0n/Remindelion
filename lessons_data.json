@@ -93,13 +93,6 @@
             "subject": "Programming 2",
             "notification_time": "15 min",
             "last_notified": null
-        },
-        {
-            "day": "monday",
-            "time": "21:28",
-            "subject": "Test",
-            "notification_time": "5 min",
-            "last_notified": "2026-02-16T21:23:00+06:00"
         }
     ],
     "8116673787": [
@@ -195,6 +188,13 @@
             "time": "17:30",
             "subject": "Programming 2",
             "notification_time": "15 min",
+            "last_notified": null
+        },
+        {
+            "day": "saturday",
+            "time": "12:00",
+            "subject": "Test",
+            "notification_time": "No reminder",
             "last_notified": null
         }
     ]
