@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for lessson-reminder on 2026-02-11T21:05:52+06:00
+# fly.toml app configuration file generated for remindelion on 2026-02-23T15:43:07Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'lessson-reminder'
-primary_region = 'arn'
+app = 'remindelion'
+primary_region = 'ams'
 
 [build]
 
@@ -20,4 +20,4 @@ primary_region = 'arn'
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 1024
+  memory_mb = 256
